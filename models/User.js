@@ -1,0 +1,16 @@
+const mongoose = require('mongoose');
+
+const taskSchema = new mongoose.Schema({
+  name: String,
+  done: { type: Boolean, default: false },
+  deadline: { type: Date, default: null },
+  createdAt: { type: Date, default: Date.now }
+});
+
+const userSchema = new mongoose.Schema({
+  userId: { type: String, unique: true },
+  tasks: [taskSchema],
+  createdAt: { type: Date, default: Date.now }
+});
+
+module.exports = mongoose.model('User', userSchema);
