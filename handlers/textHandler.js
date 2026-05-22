@@ -24,6 +24,19 @@ async function handleText(senderId, text, user) {
     return;
   }
 
+  // KAS AŠ?
+  if (text === '/kas-as') {
+    let info = `👤 Tavo statusas:\n\nRolė: ${user.role === 'admin' ? '👨‍🏫 Dėstytojas' : '🎓 Studentas'}`;
+    if (user.groupCode) {
+      const group = await Group.findOne({ groupCode: user.groupCode });
+      info += `\nGrupė: ${group ? group.groupName : user.groupCode}`;
+    } else if (user.role === 'student') {
+      info += '\nGrupė: neprisijungęs';
+    }
+    await sendMessage(senderId, info);
+    return;
+  }
+
   // DĖSTYTOJO KOMANDOS
   if (user.role === 'admin') {
     if (text.startsWith('/grupė sukurti ')) {
@@ -63,7 +76,6 @@ async function handleText(senderId, text, user) {
       group.tasks.push({ name: taskName, deadline });
       await group.save();
 
-      // Pranešti visiems grupės studentams
       const User = require('../models/User');
       const students = await User.find({ groupCode });
       for (const student of students) {
@@ -89,6 +101,10 @@ async function handleText(senderId, text, user) {
 
   // STUDENTŲ KOMANDOS
   if (text.startsWith('/prisijungti ')) {
+    if (user.role === 'admin') {
+      await sendMessage(senderId, '❌ Dėstytojas negali prisijungti prie grupės kaip studentas!');
+      return;
+    }
     const code = text.slice(13).trim().toUpperCase();
     const group = await Group.findOne({ groupCode: code });
     if (group) {
@@ -103,7 +119,7 @@ async function handleText(senderId, text, user) {
 
   // BENDROS KOMANDOS
   if (text === '/pagalba') {
-    let helpText = '📚 Komandos:\n\n/užduotys — mano užduotys\n/pridėti [pavadinimas] — pridėti užduotį\n/pridėti [pavadinimas] [YYYY-MM-DD] — su terminu\n/atlikta [nr.] — pažymėti atlikta\n/išvalyti — ištrinti visas\n/prisijungti [kodas] — prisijungti prie grupės\n\n💡 Arba rašyk laisvai!\n🎤 Arba siųsk balso žinutę!\n📸 Arba siųsk nuotrauką!';
+    let helpText = '📚 Komandos:\n\n/užduotys — mano užduotys\n/pridėti [pavadinimas] — pridėti užduotį\n/pridėti [pavadinimas] [YYYY-MM-DD] — su terminu\n/atlikta [nr.] — pažymėti atlikta\n/išvalyti — ištrinti visas\n/prisijungti [kodas] — prisijungti prie grupės\n/kas-as — mano statusas\n\n💡 Arba rašyk laisvai!\n🎤 Arba siųsk balso žinutę!\n📸 Arba siųsk nuotrauką!';
     if (user.role === 'admin') {
       helpText += '\n\n👨‍🏫 Dėstytojo komandos:\n/grupė sukurti [pavadinimas]\n/grupei [kodas] [užduotis] [data]\n/mano-grupės';
     }
@@ -111,15 +127,14 @@ async function handleText(senderId, text, user) {
 
   } else if (text === '/užduotys') {
     let allTasks = [...user.tasks];
-    
-    // Pridėti grupės užduotis jei studentas grupėje
+
     if (user.groupCode) {
       const group = await Group.findOne({ groupCode: user.groupCode });
       if (group) {
-        const groupTasks = group.tasks.map(t => ({ 
-          name: `[${group.groupName}] ${t.name}`, 
-          done: false, 
-          deadline: t.deadline 
+        const groupTasks = group.tasks.map(t => ({
+          name: `[${group.groupName}] ${t.name}`,
+          done: false,
+          deadline: t.deadline
         }));
         allTasks = [...allTasks, ...groupTasks];
       }
