@@ -1,4 +1,4 @@
-const { sendMessage } = require('../utils/messenger');
+const { sendMessage, sendQuickReply } = require('../utils/messenger');
 const { processWithAI } = require('../services/ai');
 const Group = require('../models/Group');
 
@@ -10,6 +10,30 @@ function generateGroupCode() {
 
 async function handleText(senderId, text, user) {
   console.log(`📨 [${senderId}] [${user.role}]: ${text}`);
+
+  // BDAR SUTIKIMAS - pirmas kartas
+  if (!user.consentGiven) {
+    if (text === 'Sutinku' || text === '✅ Sutinku') {
+      user.consentGiven = true;
+      await user.save();
+      await sendMessage(senderId, '✅ Ačiū! Dabar gali naudotis StudyBot.\n\nParašyk /pagalba norėdamas pamatyti komandas.');
+      return;
+    }
+
+    if (text === 'Nesutinku' || text === '❌ Nesutinku') {
+      await sendMessage(senderId, '❌ Be sutikimo negaliu apdoroti tavo duomenų. Iki!');
+      return;
+    }
+
+    await sendQuickReply(senderId,
+      '👋 Sveiki! Aš esu StudyBot — tavo mokymosi asistentas.\n\n🔒 Prieš pradedant, privalau informuoti pagal BDAR (GDPR):\n\nApdorosiu šiuos tavo duomenis:\n• Tavo "Facebook" Messenger ID\n• Užduočių sąrašą, kurį pridėsi\n• Žinučių turinį (komandoms apdoroti)\n\nDuomenys saugomi "MongoDB Atlas" duomenų bazėje ES (Frankfurt).\n\nTavo teisės:\n• Bet kada gauti savo duomenis: /mano-duomenys\n• Bet kada ištrinti viską: /ištrinti-paskyrą\n\nAr sutinki?',
+      [
+        { title: '✅ Sutinku', payload: 'CONSENT_YES' },
+        { title: '❌ Nesutinku', payload: 'CONSENT_NO' }
+      ]
+    );
+    return;
+  }
 
   // ADMIN AUTORIZACIJA
   if (text.startsWith('/admin ')) {
@@ -34,6 +58,26 @@ async function handleText(senderId, text, user) {
       info += '\nGrupė: neprisijungęs';
     }
     await sendMessage(senderId, info);
+    return;
+  }
+
+  // GDPR KOMANDOS
+  if (text === '/mano-duomenys') {
+    let info = `📊 Tavo duomenys mūsų sistemoje:\n\n`;
+    info += `🆔 Messenger ID: ${user.userId}\n`;
+    info += `👤 Rolė: ${user.role}\n`;
+    if (user.groupCode) info += `📚 Grupė: ${user.groupCode}\n`;
+    info += `📋 Užduočių: ${user.tasks.length}\n`;
+    info += `📅 Paskyros sukūrimo data: ${user.createdAt.toLocaleDateString('lt-LT')}\n\n`;
+    info += `Norėdamas ištrinti — rašyk /ištrinti-paskyrą`;
+    await sendMessage(senderId, info);
+    return;
+  }
+
+  if (text === '/ištrinti-paskyrą') {
+    const User = require('../models/User');
+    await User.deleteOne({ userId: senderId });
+    await sendMessage(senderId, '🗑️ Visi tavo duomenys ištrinti.\n\nDėkojame, kad naudojaisi StudyBot!');
     return;
   }
 
@@ -119,7 +163,7 @@ async function handleText(senderId, text, user) {
 
   // BENDROS KOMANDOS
   if (text === '/pagalba') {
-    let helpText = '📚 Komandos:\n\n/užduotys — mano užduotys\n/pridėti [pavadinimas] — pridėti užduotį\n/pridėti [pavadinimas] [YYYY-MM-DD] — su terminu\n/atlikta [nr.] — pažymėti atlikta\n/išvalyti — ištrinti visas\n/prisijungti [kodas] — prisijungti prie grupės\n/kas-as — mano statusas\n\n💡 Arba rašyk laisvai!\n🎤 Arba siųsk balso žinutę!\n📸 Arba siųsk nuotrauką!';
+    let helpText = '📚 Komandos:\n\n/užduotys — mano užduotys\n/pridėti [pavadinimas] — pridėti užduotį\n/pridėti [pavadinimas] [YYYY-MM-DD] — su terminu\n/atlikta [nr.] — pažymėti atlikta\n/išvalyti — ištrinti visas\n/prisijungti [kodas] — prisijungti prie grupės\n/kas-as — mano statusas\n\n🔒 BDAR:\n/mano-duomenys — peržiūrėti duomenis\n/ištrinti-paskyrą — ištrinti viską\n\n💡 Arba rašyk laisvai!\n🎤 Arba siųsk balso žinutę!\n📸 Arba siųsk nuotrauką!';
     if (user.role === 'admin') {
       helpText += '\n\n👨‍🏫 Dėstytojo komandos:\n/grupė sukurti [pavadinimas]\n/grupei [kodas] [užduotis] [data]\n/mano-grupės';
     }
