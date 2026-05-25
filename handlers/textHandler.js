@@ -189,20 +189,28 @@ if (text.startsWith('/prisijungti ')) {
   }
   return;
 }
-    // ATSIJUNGTI NUO GRUPĖS
-  if (text === '/atsijungti') {
+   // ATSIJUNGTI NUO GRUPĖS
+if (text === '/atsijungti') {
     if (!user.groupCode) {
-      await sendMessage(senderId, '❌ Tu neesi prisijungęs prie jokios grupės.');
-      return;
+        await sendMessage(
+            senderId,
+            '❌ Tu neesi prisijungęs prie jokios grupės.'
+        );
+        return;
     }
+
     const oldGroup = user.groupCode;
     user.groupCode = null;
+
     await user.save();
-    await sendMessage(senderId, `✅ Atsijungei nuo grupės "${oldGroup}". Daugiau negausi grupės užduočių.`);
+
+    await sendMessage(
+        senderId,
+        `✅ Atsijungei nuo grupės "${oldGroup}". Daugiau negausi grupės užduočių.`
+    );
+
     return;
-  }
-    return;
-  }
+}
 
   // BENDROS KOMANDOS
   if (text === '/pagalba') {
@@ -304,5 +312,5 @@ if (text.startsWith('/prisijungti ')) {
     }
   }
 
-
+}
 module.exports = { handleText };
