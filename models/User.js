@@ -9,8 +9,8 @@ const taskSchema = new mongoose.Schema({
 
 const userSchema = new mongoose.Schema({
   userId: { type: String, unique: true },
-  role: { type: String, enum: ['student', 'destytojas'], default: 'student' },
-  groupCode: { type: String, default: null },
+  role: { type: String, enum: ['student', 'admin'], default: 'student' },
+  groupCodes: { type: [String], default: [] },
   consentGiven: { type: Boolean, default: false },
   tasks: [taskSchema],
   createdAt: { type: Date, default: Date.now }
