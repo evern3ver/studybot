@@ -39,7 +39,7 @@ async function handleText(senderId, text, user) {
 
   // DĖSTYTOJO AUTORIZACIJA
   if (text.startsWith('/dėstytojas ')) {
-    const key = text.slice(13).trim();
+    const key = text.substring('/dėstytojas '.length).trim();
     if (key === DESTYTOJAS_KEY) {
       user.role = 'destytojas';
       await user.save();
