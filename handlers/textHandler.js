@@ -21,9 +21,11 @@ async function handleText(senderId, text, user) {
     }
 
     if (text === 'Nesutinku' || text === '❌ Nesutinku') {
-      await sendMessage(senderId, '❌ Be sutikimo negaliu apdoroti tavo duomenų. Iki!');
-      return;
-    }
+  const User = require('../models/User');
+  await User.deleteOne({ userId: senderId });
+  await sendMessage(senderId, '❌ Supratau. Tavo duomenys ištrinti. Jei persigalvosi — parašyk dar kartą.');
+  return;
+}
 
     await sendQuickReply(senderId,
       '👋 Sveiki! Aš esu StudyBot — tavo mokymosi asistentas.\n\n🔒 Prieš pradedant, privalau informuoti pagal BDAR (GDPR):\n\nApdorosiu šiuos tavo duomenis:\n• Tavo "Facebook" Messenger ID\n• Užduočių sąrašą, kurį pridėsi\n• Žinučių turinį (komandoms apdoroti)\n\nDuomenys saugomi "MongoDB Atlas" duomenų bazėje ES (Frankfurt).\n\nTavo teisės:\n• Bet kada gauti savo duomenis: /mano-duomenys\n• Bet kada ištrinti viską: /ištrinti-paskyrą\n\nAr sutinki?',
@@ -158,12 +160,24 @@ async function handleText(senderId, text, user) {
     } else {
       await sendMessage(senderId, '❌ Grupė su tokiu kodu nerasta.');
     }
+    // ATSIJUNGTI NUO GRUPĖS
+  if (text === '/atsijungti') {
+    if (!user.groupCode) {
+      await sendMessage(senderId, '❌ Tu neesi prisijungęs prie jokios grupės.');
+      return;
+    }
+    const oldGroup = user.groupCode;
+    user.groupCode = null;
+    await user.save();
+    await sendMessage(senderId, `✅ Atsijungei nuo grupės "${oldGroup}". Daugiau negausi grupės užduočių.`);
+    return;
+  }
     return;
   }
 
   // BENDROS KOMANDOS
   if (text === '/pagalba') {
-    let helpText = '📚 Komandos:\n\n/užduotys — mano užduotys\n/pridėti [pavadinimas] — pridėti užduotį\n/pridėti [pavadinimas] [YYYY-MM-DD] — su terminu\n/atlikta [nr.] — pažymėti atlikta\n/išvalyti — ištrinti visas\n/prisijungti [kodas] — prisijungti prie grupės\n/kas-as — mano statusas\n\n🔒 BDAR:\n/mano-duomenys — peržiūrėti duomenis\n/ištrinti-paskyrą — ištrinti viską\n\n💡 Arba rašyk laisvai!\n🎤 Arba siųsk balso žinutę!\n📸 Arba siųsk nuotrauką!';
+    let helpText = '📚 Komandos:\n\n/užduotys — mano užduotys\n/pridėti [pavadinimas] — pridėti užduotį\n/pridėti [pavadinimas] [YYYY-MM-DD] — su terminu\n/atlikta [nr.] — pažymėti atlikta\n/išvalyti — ištrinti visas\n/prisijungti [kodas] — prisijungti prie grupės\n/atsijungti — atsijungti nuo grupės\n/kas-as — mano statusas\n\n🔒 BDAR:\n/mano-duomenys — peržiūrėti duomenis\n/ištrinti-paskyrą — ištrinti viską\n\n💡 Arba rašyk laisvai!\n🎤 Arba siųsk balso žinutę!\n📸 Arba siųsk nuotrauką!';
     if (user.role === 'destytojas') {
       helpText += '\n\n👨‍🏫 Dėstytojo komandos:\n/grupė sukurti [pavadinimas]\n/grupei [kodas] [užduotis] [data]\n/mano-grupės';
     }
