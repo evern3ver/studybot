@@ -39,7 +39,7 @@ async function handleText(senderId, text, user) {
 
   // DĖSTYTOJO AUTORIZACIJA
   if (text.startsWith('/dėstytojas ')) {
-    const key = text.slice(12).trim();
+    const key = text.slice(13).trim();
     if (key === DESTYTOJAS_KEY) {
       user.role = 'destytojas';
       await user.save();
@@ -170,7 +170,7 @@ if (text.startsWith('/atsijungti ')) {
 }
 
 if (text.startsWith('/prisijungti ')) {
-  if (user.role === 'admin') {
+  if (user.role === 'destytojas') {
     await sendMessage(senderId, '❌ Dėstytojas negali prisijungti prie grupės kaip studentas!');
     return;
   }
