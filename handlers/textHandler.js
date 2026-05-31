@@ -21,14 +21,14 @@ async function handleText(senderId, text, user) {
     }
 
     if (text === 'Nesutinku' || text === '❌ Nesutinku') {
-  const User = require('../models/User');
-  await User.deleteOne({ userId: senderId });
-  await sendMessage(senderId, '❌ Supratau. Tavo duomenys ištrinti. Jei persigalvosi — parašyk dar kartą.');
-  return;
-}
+      const User = require('../models/User');
+      await User.deleteOne({ userId: senderId });
+      await sendMessage(senderId, '❌ Supratau. Tavo duomenys ištrinti. Jei persigalvosi — parašyk dar kartą.');
+      return;
+    }
 
     await sendQuickReply(senderId,
-      '👋 Sveiki! Aš esu StudyBot — tavo mokymosi asistentas.\n\n🔒 Prieš pradedant, privalau informuoti pagal BDAR (GDPR):\n\nApdorosiu šiuos tavo duomenis:\n• Tavo "Facebook" Messenger ID\n• Užduočių sąrašą, kurį pridėsi\n• Žinučių turinį (komandoms apdoroti)\n\nDuomenys saugomi "MongoDB Atlas" duomenų bazėje ES (Frankfurt).\n\nTavo teisės:\n• Bet kada gauti savo duomenis: /mano-duomenys\n• Bet kada ištrinti viską: /ištrinti-paskyrą\n\nAr sutinki?',
+      '👋 Sveiki! Aš esu StudyBot — automatizuota AI mokymosi pagalbos sistema.\n\n⚠️ Svarbu: tu bendrauji su dirbtiniu intelektu (AI), ne su žmogumi.\n\n🔒 Prieš pradedant, privalau informuoti pagal BDAR (GDPR):\n\nApdorosiu šiuos tavo duomenis:\n• Tavo „Facebook" Messenger ID\n• Užduočių sąrašą, kurį pridėsi\n• Žinučių turinį (komandoms apdoroti)\n\nDuomenys saugomi „MongoDB Atlas" duomenų bazėje ES (Frankfurt).\n\nTavo teisės:\n• Bet kada gauti savo duomenis: /mano-duomenys\n• Bet kada ištrinti viską: /ištrinti-paskyrą\n\nAr sutinki?',
       [
         { title: '✅ Sutinku', payload: 'CONSENT_YES' },
         { title: '❌ Nesutinku', payload: 'CONSENT_NO' }
@@ -51,13 +51,15 @@ async function handleText(senderId, text, user) {
   }
 
   // KAS AŠ?
-  if (text === '/kas-as') {
+  if (text === '/kas-aš') {
     let info = `👤 Tavo statusas:\n\nRolė: ${user.role === 'destytojas' ? '👨‍🏫 Dėstytojas' : '🎓 Studentas'}`;
-    if (user.groupCode) {
-      const group = await Group.findOne({ groupCode: user.groupCode });
-      info += `\nGrupė: ${group ? group.groupName : user.groupCode}`;
-    } else if (user.role === 'student') {
-      info += '\nGrupė: neprisijungęs';
+    if (user.role === 'student') {
+      if (user.groupCodes && user.groupCodes.length > 0) {
+        const groups = await Group.find({ groupCode: { $in: user.groupCodes } });
+        info += `\nGrupės: ${groups.map(g => g.groupName).join(', ')}`;
+      } else {
+        info += '\nGrupės: neprisijungęs prie jokios';
+      }
     }
     await sendMessage(senderId, info);
     return;
@@ -68,7 +70,9 @@ async function handleText(senderId, text, user) {
     let info = `📊 Tavo duomenys mūsų sistemoje:\n\n`;
     info += `🆔 Messenger ID: ${user.userId}\n`;
     info += `👤 Rolė: ${user.role === 'destytojas' ? 'Dėstytojas' : 'Studentas'}\n`;
-    if (user.groupCode) info += `📚 Grupė: ${user.groupCode}\n`;
+    if (user.groupCodes && user.groupCodes.length > 0) {
+      info += `📚 Grupės: ${user.groupCodes.join(', ')}\n`;
+    }
     info += `📋 Užduočių: ${user.tasks.length}\n`;
     info += `📅 Paskyros sukūrimo data: ${user.createdAt.toLocaleDateString('lt-LT')}\n\n`;
     info += `Norėdamas ištrinti — rašyk /ištrinti-paskyrą`;
@@ -94,13 +98,11 @@ async function handleText(senderId, text, user) {
         await sendMessage(senderId, `✅ Grupė sukurta!\n\nPavadinimas: ${groupName}\nKodas: ${groupCode}\n\nPasakyk studentams prisijungti: /prisijungti ${groupCode}`);
       }
       return;
-
     } else if (text.startsWith('/grupei ')) {
       const parts = text.slice(8).trim().split(' ');
       const groupCode = parts[0];
       const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
       let taskName, deadline;
-
       if (dateRegex.test(parts[parts.length - 1])) {
         deadline = new Date(parts[parts.length - 1]);
         taskName = parts.slice(1, -1).join(' ');
@@ -108,7 +110,6 @@ async function handleText(senderId, text, user) {
         taskName = parts.slice(1).join(' ');
         deadline = null;
       }
-
       const group = await Group.findOne({ groupCode });
       if (!group) {
         await sendMessage(senderId, '❌ Grupė nerasta!');
@@ -118,21 +119,17 @@ async function handleText(senderId, text, user) {
         await sendMessage(senderId, '❌ Tai ne tavo grupė!');
         return;
       }
-
       group.tasks.push({ name: taskName, deadline });
       await group.save();
-
       const User = require('../models/User');
-      const students = await User.find({ groupCode });
+      const students = await User.find({ groupCodes: groupCode });
       for (const student of students) {
         const deadlineText = deadline ? ` (iki ${deadline.toLocaleDateString('lt-LT')})` : '';
         await sendMessage(student.userId, `📢 Nauja grupės užduotis:\n\n📚 ${taskName}${deadlineText}\n\nGrupė: ${group.groupName}`);
       }
-
       const deadlineText = deadline ? `\nTerminas: ${deadline.toLocaleDateString('lt-LT')}` : '';
       await sendMessage(senderId, `✅ Užduotis išsiųsta ${students.length} studentams!\n\n"${taskName}"${deadlineText}`);
       return;
-
     } else if (text === '/mano-grupės') {
       const groups = await Group.find({ adminId: senderId });
       if (groups.length === 0) {
@@ -145,97 +142,74 @@ async function handleText(senderId, text, user) {
     }
   }
 
+  // STUDENTŲ GRUPIŲ KOMANDOS
   if (text === '/mano-grupes') {
-  if (user.groupCodes.length === 0) {
-    await sendMessage(senderId, '📋 Tu nepriklausai jokiai grupei.\n\nPrisijunk: /prisijungti [kodas]');
-    return;
-  }
-  const groups = await Group.find({ groupCode: { $in: user.groupCodes } });
-  const list = groups.map(g => `• ${g.groupName} (kodas: ${g.groupCode})`).join('\n');
-  await sendMessage(senderId, `📋 Tavo grupės:\n\n${list}\n\nAtsijungti: /atsijungti [kodas]`);
-  return;
-}
-
-if (text.startsWith('/atsijungti ')) {
-  const code = text.slice(12).trim().toUpperCase();
-  if (!user.groupCodes.includes(code)) {
-    await sendMessage(senderId, '❌ Tu nepriklausai šiai grupei. Patikrink savo grupes per /mano-grupes');
-    return;
-  }
-  const group = await Group.findOne({ groupCode: code });
-  user.groupCodes = user.groupCodes.filter(c => c !== code);
-  await user.save();
-  await sendMessage(senderId, `✅ Atsijungei nuo grupės "${group ? group.groupName : code}".`);
-  return;
-}
-
-if (text.startsWith('/prisijungti ')) {
-  if (user.role === 'destytojas') {
-    await sendMessage(senderId, '❌ Dėstytojas negali prisijungti prie grupės kaip studentas!');
-    return;
-  }
-  const code = text.slice(13).trim().toUpperCase();
-  const group = await Group.findOne({ groupCode: code });
-  if (group) {
-    if (user.groupCodes.includes(code)) {
-      await sendMessage(senderId, `⚠️ Jau esi šios grupės narys: "${group.groupName}"`);
-    } else {
-      user.groupCodes.push(code);
-      await user.save();
-      await sendMessage(senderId, `✅ Prisijungei prie grupės "${group.groupName}"!\n\nDabar gausi visas grupės užduotis automatiškai.\n\nNorėdamas atsijungti: /atsijungti ${code}`);
+    if (!user.groupCodes || user.groupCodes.length === 0) {
+      await sendMessage(senderId, '📋 Tu nepriklausai jokiai grupei.\n\nPrisijunk: /prisijungti [kodas]');
+      return;
     }
-  } else {
-    await sendMessage(senderId, '❌ Grupė su tokiu kodu nerasta.');
+    const groups = await Group.find({ groupCode: { $in: user.groupCodes } });
+    const list = groups.map(g => `• ${g.groupName} (kodas: ${g.groupCode})`).join('\n');
+    await sendMessage(senderId, `📋 Tavo grupės:\n\n${list}\n\nAtsijungti: /atsijungti [kodas]`);
+    return;
   }
-  return;
-}
-   // ATSIJUNGTI NUO GRUPĖS
-if (text === '/atsijungti') {
-    if (!user.groupCode) {
-        await sendMessage(
-            senderId,
-            '❌ Tu neesi prisijungęs prie jokios grupės.'
-        );
-        return;
+
+  if (text.startsWith('/atsijungti ')) {
+    const code = text.slice(12).trim().toUpperCase();
+    if (!user.groupCodes || !user.groupCodes.includes(code)) {
+      await sendMessage(senderId, '❌ Tu nepriklausai šiai grupei. Patikrink savo grupes per /mano-grupes');
+      return;
     }
-
-    const oldGroup = user.groupCode;
-    user.groupCode = null;
-
+    const group = await Group.findOne({ groupCode: code });
+    user.groupCodes = user.groupCodes.filter(c => c !== code);
     await user.save();
-
-    await sendMessage(
-        senderId,
-        `✅ Atsijungei nuo grupės "${oldGroup}". Daugiau negausi grupės užduočių.`
-    );
-
+    await sendMessage(senderId, `✅ Atsijungei nuo grupės "${group ? group.groupName : code}".`);
     return;
-}
+  }
+
+  if (text.startsWith('/prisijungti ')) {
+    if (user.role === 'destytojas') {
+      await sendMessage(senderId, '❌ Dėstytojas negali prisijungti prie grupės kaip studentas!');
+      return;
+    }
+    const code = text.slice(13).trim().toUpperCase();
+    const group = await Group.findOne({ groupCode: code });
+    if (group) {
+      if (!user.groupCodes) user.groupCodes = [];
+      if (user.groupCodes.includes(code)) {
+        await sendMessage(senderId, `⚠️ Jau esi šios grupės narys: "${group.groupName}"`);
+      } else {
+        user.groupCodes.push(code);
+        await user.save();
+        await sendMessage(senderId, `✅ Prisijungei prie grupės "${group.groupName}"!\n\nDabar gausi visas grupės užduotis automatiškai.\n\nNorėdamas atsijungti: /atsijungti ${code}`);
+      }
+    } else {
+      await sendMessage(senderId, '❌ Grupė su tokiu kodu nerasta.');
+    }
+    return;
+  }
 
   // BENDROS KOMANDOS
   if (text === '/pagalba') {
-    let helpText = '📚 Komandos:\n\n/užduotys — mano užduotys\n/pridėti [pavadinimas] — pridėti užduotį\n/pridėti [pavadinimas] [YYYY-MM-DD] — su terminu\n/atlikta [nr.] — pažymėti atlikta\n/išvalyti — ištrinti visas\n/prisijungti [kodas] — prisijungti prie grupės\n/mano-grupes\n/atsijungti [kodas] — atsijungti nuo grupės\n/kas-as — mano statusas\n\n🔒 BDAR:\n/mano-duomenys — peržiūrėti duomenis\n/ištrinti-paskyrą — ištrinti viską\n\n💡 Arba rašyk laisvai!\n🎤 Arba siųsk balso žinutę!\n📸 Arba siųsk nuotrauką!';
+    let helpText = '📚 Komandos:\n\n/užduotys — mano užduotys\n/pridėti [pavadinimas] — pridėti užduotį\n/pridėti [pavadinimas] [YYYY-MM-DD] — su terminu\n/atlikta [nr.] — pažymėti atlikta\n/ištrinti [nr.] — ištrinti vieną užduotį\n/išvalyti — ištrinti visas\n/prisijungti [kodas] — prisijungti prie grupės\n/mano-grupes — mano grupės\n/atsijungti [kodas] — atsijungti nuo grupės\n/kas-aš — mano statusas\n/dėstytojas [raktas] — tapti dėstytoju\n\n🔒 BDAR:\n/mano-duomenys — peržiūrėti duomenis\n/ištrinti-paskyrą — ištrinti viską\n\n💡 Arba rašyk laisvai!\n🎤 Arba siųsk balso žinutę!\n📸 Arba siųsk nuotrauką!';
     if (user.role === 'destytojas') {
       helpText += '\n\n👨‍🏫 Dėstytojo komandos:\n/grupė sukurti [pavadinimas]\n/grupei [kodas] [užduotis] [data]\n/mano-grupės';
     }
     await sendMessage(senderId, helpText);
 
- } else if (text === '/užduotys') {
-  let allTasks = [...user.tasks];
-
-  if (user.groupCodes && user.groupCodes.length > 0) {
-    const groups = await Group.find({ groupCode: { $in: user.groupCodes } });
-    for (const group of groups) {
-      const groupTasks = group.tasks.map(t => ({
-        name: `[${group.groupName}] ${t.name}`,
-        done: false,
-        deadline: t.deadline
-      }));
-      allTasks = [...allTasks, ...groupTasks];
+  } else if (text === '/užduotys') {
+    let allTasks = [...user.tasks];
+    if (user.groupCodes && user.groupCodes.length > 0) {
+      const groups = await Group.find({ groupCode: { $in: user.groupCodes } });
+      for (const group of groups) {
+        const groupTasks = group.tasks.map(t => ({
+          name: `[${group.groupName}] ${t.name}`,
+          done: false,
+          deadline: t.deadline
+        }));
+        allTasks = [...allTasks, ...groupTasks];
+      }
     }
-  }
-
-
     if (allTasks.length === 0) {
       await sendMessage(senderId, '📋 Neturi jokių užduočių!\n\nPridėk: /pridėti Matematika');
     } else {
@@ -274,6 +248,17 @@ if (text === '/atsijungti') {
       await sendMessage(senderId, '❌ Užduotis nerasta!');
     }
 
+  } else if (text.startsWith('/ištrinti ')) {
+    const num = parseInt(text.slice(10)) - 1;
+    if (num >= 0 && num < user.tasks.length) {
+      const taskName = user.tasks[num].name;
+      user.tasks.splice(num, 1);
+      await user.save();
+      await sendMessage(senderId, `🗑️ Ištrinta:\n"${taskName}"`);
+    } else {
+      await sendMessage(senderId, '❌ Užduotis nerasta! Patikrink per /užduotys');
+    }
+
   } else if (text === '/išvalyti') {
     user.tasks = [];
     await user.save();
@@ -283,7 +268,6 @@ if (text === '/atsijungti') {
     try {
       await sendMessage(senderId, '🤔 Apdoroju...');
       const aiResult = await processWithAI(text, user);
-
       if (aiResult.action === 'add_task' && aiResult.task_name) {
         const deadline = aiResult.deadline ? new Date(aiResult.deadline) : null;
         user.tasks.push({ name: aiResult.task_name, deadline });
@@ -311,6 +295,6 @@ if (text === '/atsijungti') {
       await sendMessage(senderId, '❓ Neatpažįstu komandos. /pagalba');
     }
   }
-
 }
+
 module.exports = { handleText };
